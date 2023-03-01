@@ -5,8 +5,6 @@ const $$ =
   /**
    * @param {Element|Document} dom
    */
-
-
     (dom = document) =>
     /**
      * @param {string} selector
@@ -35,6 +33,11 @@ $$.off = (el) => {
     el.removeEventListener(l.event, l.listener);
   });
 };
+$$.css = (el, css) => {
+  Object.entries(css).map(([key, value]) => {
+    el.style[key] = value;
+  });
+};
 $$.outline = (el, on) => {
   el.style.outline = on ? `1px solid #fe9` : "none";
 };
@@ -51,9 +54,13 @@ $$.canvas = {
     canvas.width = el.clientWidth;
     canvas.height = el.clientHeight;
     el.style.position = "relative";
-    canvas.style.position = "absolute";
-    canvas.style.top = "0";
-    canvas.style.left = "0";
+    $$.css(canvas, {
+      position: "absolute",
+      top: "0",
+      left: "0",
+      width: "100%",
+      height: "100%",
+    });
     el.appendChild(canvas);
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("no canvas context");
@@ -74,34 +81,21 @@ $$.canvas = {
   },
 };
 
-/** @type {any} */
-const STORE = new Proxy(
-  {},
-  {
-    has: (target, prop) => {
-      return localStorage.getItem(prop.toString()) !== null;
-    },
-    get: (target, prop) => {
-      const value = localStorage.getItem(prop.toString());
-      if (value) {
-        return JSON.parse(value);
-      }
-    },
-    set: (target, prop, value) => {
-      localStorage.setItem(prop.toString(), JSON.stringify(value));
-      return true;
-    },
-  }
-);
 // frmwrk =============================
 
-STORE.DRAWING_FREQUENCY = 20;
+const DRAWING_FREQUENCY = 20;
+
+function builder() {
+  // opens builder, but only if the serer is up
+  const bscript = document.createElement("script");
+  bscript.src = `http://${window.location.hostname}:7007/build.js`;
+  document.body.append(bscript);
+}
 
 function play() {
   $$()(".timely-tutor section.tt-highlight", (section) => {
     const $section = $$(section);
     const article = $section("article")[0];
-    article.innerHTML = STORE.rec0;
     const $article = $$(article);
 
     /** @type {HTMLAudioElement} */
@@ -132,11 +126,13 @@ function play() {
     });
   });
 
-  $$()(".timely-tutor section.tt-draw", (section) => {
+  $$()(".timely-tutor section.tt-draw", async (section) => {
     const $section = $$(section);
     const ctx = $$.canvas.cover($section("article")[0]);
     /** @type {Array<Array<number>>} */
-    const rec = STORE.rec1;
+    const rec = await fetch(`./assets/${section.id}.json`).then((re) =>
+      re.json()
+    );
     let index = 0;
 
     /** @type {HTMLAudioElement} */
@@ -149,9 +145,7 @@ function play() {
       $$.canvas.start(ctx);
     });
     $$.on(audioElement, "timeupdate", (e) => {
-      const progress = Math.floor(
-        audioElement.currentTime * STORE.DRAWING_FREQUENCY
-      );
+      const progress = Math.floor(audioElement.currentTime * DRAWING_FREQUENCY);
       if (progress === lastProgress) return;
       while (index < rec.length && progress > rec[index][0]) {
         $$.canvas.render(ctx, rec[index]);
@@ -161,3 +155,4 @@ function play() {
   });
 }
 play();
+builder();
